@@ -95,8 +95,12 @@ jobs:
           - Linux aarch64
 
           Main binaries:
-          - qemu-system-aarch64
+          - qemu-system-aarch64 on aarch64 hosts
+          - qemu-system-x86_64 on x86_64 hosts
           - qemu-img
+
+          Linux x86_64 packages are named qemu-x86_64-headless-linux and
+          include x86 microvm machine support.
 
           Notes:
           - No upstream QEMU C source patches are applied.

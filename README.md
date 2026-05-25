@@ -2,15 +2,18 @@
 
 Portable, headless QEMU 11.0.0 builds for libvirt-managed Linux guests.
 
-This project builds a small QEMU distribution focused on `qemu-system-aarch64`
-and `qemu-img`. It targets ARM `virt` machines, common virtio devices, vhost-user
-virtiofs integration, and headless server workloads.
+This project builds small QEMU distributions focused on the host platform's
+matching system emulator and `qemu-img`. It targets common headless Linux
+machines, virtio devices, vhost-user virtiofs integration, and server workloads.
 
 Release artifacts are built for:
 
 - macOS aarch64
 - Linux x86_64
 - Linux aarch64
+
+Linux x86_64 builds produce `qemu-x86_64-headless-linux` packages with
+`qemu-system-x86_64`, including x86 `microvm` machine support.
 
 The build intentionally omits desktop/display features, bundled firmware blobs,
 guest-agent binaries, and storage/display integrations that are not needed for

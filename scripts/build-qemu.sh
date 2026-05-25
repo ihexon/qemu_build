@@ -3,7 +3,6 @@ set -euo pipefail
 
 QEMU_VERSION="${QEMU_VERSION:-11.0.0}"
 QEMU_SHA256="${QEMU_SHA256:-c04ca36012653f32d11c674d370cf52a710e7d3f18c2d8b63e4932052a4854d6}"
-TARGET_LIST="${TARGET_LIST:-aarch64-softmmu}"
 DEVICE_PROFILE="${DEVICE_PROFILE:-headless-linux}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -25,11 +24,16 @@ case "$MACHINE" in
   *) ARCH_TAG="$MACHINE" ;;
 esac
 
+TARGET_ARCH="${TARGET_ARCH:-$ARCH_TAG}"
+TARGET_LIST="${TARGET_LIST:-$TARGET_ARCH-softmmu}"
+QEMU_SYSTEM_BIN="qemu-system-$TARGET_ARCH"
+
 SOURCE_ARCHIVE="$DOWNLOAD_DIR/qemu-$QEMU_VERSION.tar.xz"
 SOURCE_DIR="$WORK_DIR/qemu-$QEMU_VERSION"
 BUILD_DIR="$SOURCE_DIR/build"
-PREFIX="$WORK_DIR/install/qemu-$QEMU_VERSION-$OS_TAG-$ARCH_TAG"
-PACKAGE_DIR="$DIST_DIR/qemu-$QEMU_VERSION-$OS_TAG-$ARCH_TAG"
+PACKAGE_NAME="qemu-$TARGET_ARCH-headless-linux"
+PREFIX="$WORK_DIR/install/$PACKAGE_NAME-$QEMU_VERSION-$OS_TAG-$ARCH_TAG"
+PACKAGE_DIR="$DIST_DIR/$PACKAGE_NAME-$QEMU_VERSION-$OS_TAG-$ARCH_TAG-portable"
 
 configure_macos_static_glib_pkg_config() {
   [[ "${MACOS_STATIC_GLIB:-1}" == "1" ]] || return 0
@@ -101,9 +105,9 @@ prepare_source() {
   rm -rf "$SOURCE_DIR" "$PREFIX" "$PACKAGE_DIR"
   mkdir -p "$WORK_DIR" "$DIST_DIR"
   tar -C "$WORK_DIR" -xf "$SOURCE_ARCHIVE"
-  mkdir -p "$SOURCE_DIR/configs/devices/aarch64-softmmu"
-  cp "$ROOT_DIR/configs/devices/aarch64-softmmu/$DEVICE_PROFILE.mak" \
-    "$SOURCE_DIR/configs/devices/aarch64-softmmu/$DEVICE_PROFILE.mak"
+  mkdir -p "$SOURCE_DIR/configs/devices/$TARGET_ARCH-softmmu"
+  cp "$ROOT_DIR/configs/devices/$TARGET_ARCH-softmmu/$DEVICE_PROFILE.mak" \
+    "$SOURCE_DIR/configs/devices/$TARGET_ARCH-softmmu/$DEVICE_PROFILE.mak"
 }
 
 configure_qemu() {
@@ -115,7 +119,7 @@ configure_qemu() {
     "--python=$python_bin"
     "--prefix=$PREFIX"
     "--target-list=$TARGET_LIST"
-    "--with-devices-aarch64=$DEVICE_PROFILE"
+    "--with-devices-$TARGET_ARCH=$DEVICE_PROFILE"
     "--without-default-devices"
     "--without-default-features"
     "--enable-system"
@@ -190,25 +194,23 @@ configure_qemu() {
 
   if [[ "$OS_TAG" == "linux" ]]; then
     args+=("--static")
-    if [[ "$ARCH_TAG" == "aarch64" ]]; then
-      args+=("--enable-kvm")
-    fi
+    args+=("--enable-kvm")
   fi
 
   (cd "$SOURCE_DIR" && ./configure "${args[@]}")
 }
 
 build_and_install() {
-  ninja -C "$BUILD_DIR" -j "$JOBS" qemu-system-aarch64 qemu-img
+  ninja -C "$BUILD_DIR" -j "$JOBS" "$QEMU_SYSTEM_BIN" qemu-img
   DESTDIR= ninja -C "$BUILD_DIR" install
 }
 
 copy_base_package() {
   mkdir -p "$PACKAGE_DIR/bin" "$PACKAGE_DIR/share/qemu"
-  cp "$PREFIX/bin/qemu-system-aarch64" "$PACKAGE_DIR/bin/"
+  cp "$PREFIX/bin/$QEMU_SYSTEM_BIN" "$PACKAGE_DIR/bin/"
   cp "$PREFIX/bin/qemu-img" "$PACKAGE_DIR/bin/"
   if [[ "$OS_TAG" == "linux" ]]; then
-    strip --strip-unneeded "$PACKAGE_DIR/bin/qemu-system-aarch64" "$PACKAGE_DIR/bin/qemu-img"
+    strip --strip-unneeded "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" "$PACKAGE_DIR/bin/qemu-img"
   fi
   if [[ -f "$PREFIX/share/qemu/trace-events-all" ]]; then
     cp "$PREFIX/share/qemu/trace-events-all" "$PACKAGE_DIR/share/qemu/"
@@ -223,7 +225,7 @@ bundle_macos_dylibs() {
   local item dep base rel
   mkdir -p "$PACKAGE_DIR/lib"
 
-  local queue=("$PACKAGE_DIR/bin/qemu-system-aarch64" "$PACKAGE_DIR/bin/qemu-img")
+  local queue=("$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" "$PACKAGE_DIR/bin/qemu-img")
   local seen=""
 
   while ((${#queue[@]})); do
@@ -267,9 +269,9 @@ sign_macos_package() {
   done < <(find "$PACKAGE_DIR/lib" -type f -name '*.dylib' -print0 2>/dev/null)
   codesign --force --sign - "$PACKAGE_DIR/bin/qemu-img"
   if [[ -f "$entitlements" ]]; then
-    codesign --force --sign - --entitlements "$entitlements" "$PACKAGE_DIR/bin/qemu-system-aarch64"
+    codesign --force --sign - --entitlements "$entitlements" "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN"
   else
-    codesign --force --sign - "$PACKAGE_DIR/bin/qemu-system-aarch64"
+    codesign --force --sign - "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN"
   fi
 }
 
@@ -279,14 +281,14 @@ QEMU $QEMU_VERSION $OS_TAG $ARCH_TAG portable headless build
 =============================================================
 
 Target:
-- qemu-system-aarch64
+- $QEMU_SYSTEM_BIN
 - qemu-img
 
 Build profile:
-- aarch64-softmmu only
-- ARM virt machine
+- $TARGET_LIST only
+- $TARGET_ARCH headless Linux machines
 - headless Linux/libvirt oriented
-- HVF on macOS, KVM on Linux aarch64, TCG everywhere
+- HVF on macOS, KVM on Linux, TCG everywhere
 - virtio-blk, virtio-net, virtio-pci, virtio-rng, virtio-balloon
 - virtio-scsi, virtio-serial, virtserialport
 - vhost-user-fs for virtiofs
@@ -311,7 +313,7 @@ Portability:
 Notes:
 - No upstream QEMU C source patches are applied.
 - The build copies in one QEMU device profile:
-  configs/devices/aarch64-softmmu/headless-linux.mak
+  configs/devices/$TARGET_ARCH-softmmu/headless-linux.mak
 - Linux guests should install qemu-guest-agent inside the guest. This package
   provides the QEMU-side virtio-serial channel, not a guest agent binary.
 - virtiofsd is not included; provide a compatible virtiofsd separately.
@@ -319,12 +321,21 @@ EOF
 }
 
 verify_package() {
-  "$PACKAGE_DIR/bin/qemu-system-aarch64" --version
+  local machine
+
+  if [[ "$TARGET_ARCH" == "x86_64" ]]; then
+    machine="microvm"
+  else
+    machine="virt"
+  fi
+
+  "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" --version
   "$PACKAGE_DIR/bin/qemu-img" --version
-  "$PACKAGE_DIR/bin/qemu-system-aarch64" -accel help
-  "$PACKAGE_DIR/bin/qemu-system-aarch64" -display help
-  "$PACKAGE_DIR/bin/qemu-system-aarch64" -machine virt -device help | tee "$PACKAGE_DIR/device-help.txt"
-  "$PACKAGE_DIR/bin/qemu-system-aarch64" -machine virt -netdev help | tee "$PACKAGE_DIR/netdev-help.txt"
+  "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" -accel help
+  "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" -display help
+  "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" -machine help | tee "$PACKAGE_DIR/machine-help.txt"
+  "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" -machine "$machine" -device help | tee "$PACKAGE_DIR/device-help.txt"
+  "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" -machine "$machine" -netdev help | tee "$PACKAGE_DIR/netdev-help.txt"
   "$PACKAGE_DIR/bin/qemu-img" --help | tee "$PACKAGE_DIR/qemu-img-help.txt"
 
   grep -q 'virtio-blk-pci' "$PACKAGE_DIR/device-help.txt"
@@ -336,17 +347,21 @@ verify_package() {
   grep -q 'vhost-user-fs-pci' "$PACKAGE_DIR/device-help.txt"
   grep -q 'vhost-user' "$PACKAGE_DIR/netdev-help.txt"
 
+  if [[ "$TARGET_ARCH" == "x86_64" ]]; then
+    grep -q '^microvm' "$PACKAGE_DIR/machine-help.txt"
+  fi
+
   if [[ "$OS_TAG" == "macos" ]]; then
-    otool -L "$PACKAGE_DIR/bin/qemu-system-aarch64" | tee "$PACKAGE_DIR/otool-qemu-system-aarch64.txt"
-    codesign --verify --verbose=2 "$PACKAGE_DIR/bin/qemu-system-aarch64" "$PACKAGE_DIR/bin/qemu-img"
+    otool -L "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" | tee "$PACKAGE_DIR/otool-$QEMU_SYSTEM_BIN.txt"
+    codesign --verify --verbose=2 "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" "$PACKAGE_DIR/bin/qemu-img"
   else
-    file "$PACKAGE_DIR/bin/qemu-system-aarch64" | tee "$PACKAGE_DIR/file-qemu-system-aarch64.txt"
-    ldd "$PACKAGE_DIR/bin/qemu-system-aarch64" | tee "$PACKAGE_DIR/ldd-qemu-system-aarch64.txt" || true
+    file "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" | tee "$PACKAGE_DIR/file-$QEMU_SYSTEM_BIN.txt"
+    ldd "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" | tee "$PACKAGE_DIR/ldd-$QEMU_SYSTEM_BIN.txt" || true
   fi
 }
 
 archive_package() {
-  local archive="$DIST_DIR/qemu-$QEMU_VERSION-$OS_TAG-$ARCH_TAG.tar.gz"
+  local archive="$PACKAGE_DIR.tar.gz"
   tar -C "$DIST_DIR" -czf "$archive" "$(basename "$PACKAGE_DIR")"
   echo "Created $archive"
 }
