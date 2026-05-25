@@ -1,0 +1,11 @@
+/.cache/
+/build/
+/dist/
+/out/
+/qemu-*/
+*.tar
+*.tar.*
+*.zip
+*.log
+.DS_Store
+
