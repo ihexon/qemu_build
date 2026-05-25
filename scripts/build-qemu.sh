@@ -31,6 +31,59 @@ BUILD_DIR="$SOURCE_DIR/build"
 PREFIX="$WORK_DIR/install/qemu-$QEMU_VERSION-$OS_TAG-$ARCH_TAG"
 PACKAGE_DIR="$DIST_DIR/qemu-$QEMU_VERSION-$OS_TAG-$ARCH_TAG"
 
+configure_macos_static_glib_pkg_config() {
+  [[ "${MACOS_STATIC_GLIB:-1}" == "1" ]] || return 0
+  [[ "$OS_TAG" == "macos" ]] || return 0
+
+  local glib_prefix glib_libdir glib_includedir glib_version glib_pcdir
+  local pcre2_libdir gettext_prefix gettext_libdir
+  local glib_archive intl_archive pcre2_archive
+  local overlay_dir
+
+  glib_prefix="$(pkg-config --variable=prefix glib-2.0)"
+  glib_libdir="$(pkg-config --variable=libdir glib-2.0)"
+  glib_includedir="$(pkg-config --variable=includedir glib-2.0)"
+  glib_version="$(pkg-config --modversion glib-2.0)"
+  glib_pcdir="$(pkg-config --variable=pcfiledir glib-2.0)"
+  pcre2_libdir="$(pkg-config --variable=libdir libpcre2-8)"
+
+  gettext_prefix="$(brew --prefix gettext 2>/dev/null || true)"
+  gettext_libdir="${gettext_prefix:+$gettext_prefix/lib}"
+
+  glib_archive="$glib_libdir/libglib-2.0.a"
+  intl_archive="$gettext_libdir/libintl.a"
+  pcre2_archive="$pcre2_libdir/libpcre2-8.a"
+
+  if [[ ! -f "$glib_archive" || ! -f "$intl_archive" || ! -f "$pcre2_archive" ]]; then
+    echo "macOS static GLib archives are incomplete; using normal pkg-config GLib" >&2
+    return 0
+  fi
+
+  overlay_dir="$WORK_DIR/pkgconfig-static-glib"
+  mkdir -p "$overlay_dir"
+  cat > "$overlay_dir/glib-2.0.pc" <<EOF
+prefix=$glib_prefix
+bindir=\${prefix}/bin
+datadir=\${prefix}/share
+includedir=$glib_includedir
+libdir=$glib_libdir
+
+glib_genmarshal=\${bindir}/glib-genmarshal
+gobject_query=\${bindir}/gobject-query
+glib_mkenums=\${bindir}/glib-mkenums
+glib_valgrind_suppressions=\${datadir}/glib-2.0/valgrind/glib.supp
+
+Name: GLib
+Description: C Utility Library
+Version: $glib_version
+Libs: $glib_archive $intl_archive -liconv -lm -framework Foundation -framework CoreFoundation -framework AppKit -framework Carbon $pcre2_archive -pthread
+Cflags: -I\${includedir}/glib-2.0 -I\${libdir}/glib-2.0/include -I$gettext_prefix/include
+EOF
+
+  export PKG_CONFIG_PATH="$overlay_dir:$glib_pcdir:${PKG_CONFIG_PATH:-}"
+  echo "macOS static GLib enabled via $glib_archive"
+}
+
 download_source() {
   mkdir -p "$DOWNLOAD_DIR"
   if [[ ! -f "$SOURCE_ARCHIVE" ]]; then
@@ -56,6 +109,7 @@ prepare_source() {
 configure_qemu() {
   local python_bin
   python_bin="$(command -v python3)"
+  configure_macos_static_glib_pkg_config
 
   local args=(
     "--python=$python_bin"
@@ -207,6 +261,7 @@ bundle_macos_dylibs() {
 
 sign_macos_package() {
   local entitlements="$SOURCE_DIR/accel/hvf/entitlements.plist"
+  xattr -cr "$PACKAGE_DIR" 2>/dev/null || true
   while IFS= read -r -d '' dylib; do
     codesign --force --sign - "$dylib"
   done < <(find "$PACKAGE_DIR/lib" -type f -name '*.dylib' -print0 2>/dev/null)
@@ -246,7 +301,8 @@ Trimmed:
 - remote storage libraries: rbd, glusterfs, libiscsi, libnfs, libssh, curl
 
 Portability:
-- macOS: dynamic Mach-O with bundled non-system dylibs and @loader_path paths.
+- macOS: links Homebrew GLib statically when its static archive is available,
+  then bundles any remaining non-system dylibs with @loader_path paths.
 - Linux: built in Alpine/musl and configured with --static.
 - Linux release binaries are stripped with strip --strip-unneeded.
 - System libraries/frameworks may still be required where the OS does not support
