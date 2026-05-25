@@ -10,6 +10,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     name: ${{ matrix.name }}
@@ -86,4 +89,3 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --title "QEMU ${GITHUB_REF_NAME}" \
             --notes-file RELEASE-NOTES.md
-
