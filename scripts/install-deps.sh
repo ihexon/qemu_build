@@ -14,7 +14,7 @@ case "$(uname -s)" in
     if command -v apk >/dev/null 2>&1; then
       apk add --no-cache \
         bash bison build-base ca-certificates curl file flex gettext-dev \
-        gettext-static glib-dev glib-static libffi-dev \
+        gettext-static git glib-dev glib-static libffi-dev \
         linux-headers meson ninja pcre2-dev pkgconf python3 \
         xz zlib-dev zlib-static
     elif command -v apt-get >/dev/null 2>&1; then
