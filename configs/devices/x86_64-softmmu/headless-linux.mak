@@ -18,3 +18,10 @@ CONFIG_VIRTIO_SERIAL=y
 
 # libvirt guest-agent channel and virtiofs support.
 CONFIG_VHOST_USER_FS=y
+
+# Q35 selects ACPI_CXL/HMAT in QEMU 11.0.0. Keep the corresponding support
+# objects linked instead of patching upstream Kconfig.
+CONFIG_PXB=y
+CONFIG_PCIE_PORT=y
+CONFIG_CXL=y
+CONFIG_CXL_MEM_DEVICE=y
