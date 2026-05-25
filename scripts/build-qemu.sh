@@ -131,7 +131,8 @@ configure_qemu() {
   )
 
   if [[ "$OS_TAG" == "macos" ]]; then
-    args+=("--enable-hvf")
+    export PKG_CONFIG_ALL_STATIC="${PKG_CONFIG_ALL_STATIC:-1}"
+    args+=("--enable-hvf" "-Dprefer_static=true")
   fi
 
   if [[ "$OS_TAG" == "linux" ]]; then
@@ -247,7 +248,8 @@ Trimmed:
 
 Portability:
 - macOS: dynamic Mach-O with bundled non-system dylibs and @loader_path paths.
-- Linux: configured with --static.
+- macOS: Homebrew static libraries are preferred where available.
+- Linux: built in Alpine/musl and configured with --static.
 - Linux release binaries are stripped with strip --strip-unneeded.
 - System libraries/frameworks may still be required where the OS does not support
   a fully static executable model.

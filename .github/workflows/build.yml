@@ -14,20 +14,9 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: macOS aarch64
-            runner: macos-14
-          - name: Linux x86_64
-            runner: ubuntu-24.04
-          - name: Linux aarch64
-            runner: ubuntu-24.04-arm
-
+  build-macos:
+    name: macOS aarch64
+    runs-on: macos-14
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,14 +30,48 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: qemu-${{ runner.os }}-${{ runner.arch }}
+          name: qemu-macOS-ARM64
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  build-linux:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64
+            runner: ubuntu-24.04
+            artifact: qemu-linux-x86_64
+          - name: Linux aarch64
+            runner: ubuntu-24.04-arm
+            artifact: qemu-linux-aarch64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and package in Alpine
+        run: |
+          docker run --rm \
+            -v "$PWD:/work" \
+            -w /work \
+            alpine:3.20 \
+            /bin/sh -lc 'apk add --no-cache bash && bash ./scripts/install-deps.sh && bash ./scripts/build-qemu.sh'
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
           path: dist/*.tar.gz
           if-no-files-found: error
           retention-days: 14
 
   release:
     name: Release
-    needs: build
+    needs: [ build-macos, build-linux ]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     steps:
@@ -77,7 +100,9 @@ jobs:
 
           Notes:
           - No upstream QEMU C source patches are applied.
+          - Linux builds are produced inside Alpine/musl containers.
           - Linux binaries are stripped with strip --strip-unneeded.
+          - macOS builds prefer Homebrew static libraries where available.
           - virtiofs requires a separate compatible virtiofsd.
           - qemu-guest-agent should be installed inside Linux guests when needed.
           EOF

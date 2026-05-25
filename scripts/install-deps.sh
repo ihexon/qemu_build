@@ -11,7 +11,13 @@ case "$(uname -s)" in
     brew install glib ninja pkg-config python
     ;;
   Linux)
-    if command -v apt-get >/dev/null 2>&1; then
+    if command -v apk >/dev/null 2>&1; then
+      apk add --no-cache \
+        bash bison build-base ca-certificates curl file flex gettext-dev \
+        gettext-static glib-dev glib-static libffi-dev libffi-static \
+        linux-headers meson ninja pcre2-dev pcre2-static pkgconf python3 \
+        xz zlib-dev zlib-static
+    elif command -v apt-get >/dev/null 2>&1; then
       sudo apt-get update
       sudo apt-get install -y \
         build-essential ca-certificates curl file flex bison \

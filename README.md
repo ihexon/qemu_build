@@ -8,8 +8,8 @@ headless server workloads rather than desktop/display use.
 ## Supported build hosts
 
 - macOS aarch64: GitHub Actions `macos-14`
-- Linux x86_64: GitHub Actions `ubuntu-24.04`
-- Linux aarch64: GitHub Actions `ubuntu-24.04-arm`
+- Linux x86_64: GitHub Actions `ubuntu-24.04` with an Alpine container
+- Linux aarch64: GitHub Actions `ubuntu-24.04-arm` with an Alpine container
 
 GitHub documents these runner labels in its hosted runner reference:
 <https://docs.github.com/en/actions/reference/github-hosted-runners-reference>
@@ -45,13 +45,14 @@ GitHub documents these runner labels in its hosted runner reference:
 
 macOS does not support a normal fully static QEMU Mach-O build in this setup; a
 direct `--static` build fails during link because Darwin has no suitable
-`crt0.o` path for that model. The macOS package therefore bundles non-system
-dylibs and rewrites install names to `@loader_path` relative paths. macOS system
-frameworks and `/usr/lib` libraries remain dynamic.
+`crt0.o` path for that model. The macOS build therefore prefers Homebrew static
+libraries where available, then bundles any remaining non-system dylibs and
+rewrites install names to `@loader_path` relative paths. macOS system frameworks
+and `/usr/lib` libraries remain dynamic.
 
-Linux builds are configured with `--static`. If a future distribution changes
-the availability of static dependency archives, the CI log will show the link
-failure clearly. Linux release binaries are stripped with
+Linux builds run inside Alpine containers and are configured with `--static`.
+This avoids glibc static-link NSS/runtime warnings for functions such as
+`getpwnam_r` and `getpwuid_r`. Linux release binaries are stripped with
 `strip --strip-unneeded`.
 
 ## Guest-agent and virtiofs notes
