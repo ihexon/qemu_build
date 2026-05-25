@@ -51,7 +51,8 @@ frameworks and `/usr/lib` libraries remain dynamic.
 
 Linux builds are configured with `--static`. If a future distribution changes
 the availability of static dependency archives, the CI log will show the link
-failure clearly.
+failure clearly. Linux release binaries are stripped with
+`strip --strip-unneeded`.
 
 ## Guest-agent and virtiofs notes
 
@@ -87,4 +88,3 @@ Release containing all produced archives:
 git tag v11.0.0-1
 git push origin main v11.0.0-1
 ```
-

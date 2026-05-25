@@ -27,4 +27,3 @@ case "$(uname -s)" in
     exit 1
     ;;
 esac
-

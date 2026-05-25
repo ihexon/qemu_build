@@ -153,6 +153,9 @@ copy_base_package() {
   mkdir -p "$PACKAGE_DIR/bin" "$PACKAGE_DIR/share/qemu"
   cp "$PREFIX/bin/qemu-system-aarch64" "$PACKAGE_DIR/bin/"
   cp "$PREFIX/bin/qemu-img" "$PACKAGE_DIR/bin/"
+  if [[ "$OS_TAG" == "linux" ]]; then
+    strip --strip-unneeded "$PACKAGE_DIR/bin/qemu-system-aarch64" "$PACKAGE_DIR/bin/qemu-img"
+  fi
   if [[ -f "$PREFIX/share/qemu/trace-events-all" ]]; then
     cp "$PREFIX/share/qemu/trace-events-all" "$PACKAGE_DIR/share/qemu/"
   fi
@@ -245,6 +248,7 @@ Trimmed:
 Portability:
 - macOS: dynamic Mach-O with bundled non-system dylibs and @loader_path paths.
 - Linux: configured with --static.
+- Linux release binaries are stripped with strip --strip-unneeded.
 - System libraries/frameworks may still be required where the OS does not support
   a fully static executable model.
 
