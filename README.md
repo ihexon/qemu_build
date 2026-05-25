@@ -45,10 +45,11 @@ GitHub documents these runner labels in its hosted runner reference:
 
 macOS does not support a normal fully static QEMU Mach-O build in this setup; a
 direct `--static` build fails during link because Darwin has no suitable
-`crt0.o` path for that model. The macOS build therefore prefers Homebrew static
-libraries where available, then bundles any remaining non-system dylibs and
-rewrites install names to `@loader_path` relative paths. macOS system frameworks
-and `/usr/lib` libraries remain dynamic.
+`crt0.o` path for that model. Homebrew may provide static archives such as
+`libglib-2.0.a`, but QEMU/Meson `prefer_static` makes the Darwin linker use
+`-static`, so this build keeps the proven Mach-O model: bundle non-system dylibs
+and rewrite install names to `@loader_path` relative paths. macOS system
+frameworks and `/usr/lib` libraries remain dynamic.
 
 Linux builds run inside Alpine containers and are configured with `--static`.
 This avoids glibc static-link NSS/runtime warnings for functions such as

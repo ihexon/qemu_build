@@ -102,7 +102,7 @@ jobs:
           - No upstream QEMU C source patches are applied.
           - Linux builds are produced inside Alpine/musl containers.
           - Linux binaries are stripped with strip --strip-unneeded.
-          - macOS builds prefer Homebrew static libraries where available.
+          - macOS bundles non-system dylibs with @loader_path install names.
           - virtiofs requires a separate compatible virtiofsd.
           - qemu-guest-agent should be installed inside Linux guests when needed.
           EOF
