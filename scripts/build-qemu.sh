@@ -202,6 +202,7 @@ configure_qemu() {
 
   if [[ "$OS_TAG" == "linux" ]]; then
     args+=("--static")
+    args+=("--disable-pie")
     args+=("--enable-kvm")
     args+=("--enable-guest-agent")
   fi
