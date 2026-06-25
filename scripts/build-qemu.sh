@@ -3,6 +3,7 @@ set -euo pipefail
 
 QEMU_VERSION="${QEMU_VERSION:-11.0.0}"
 QEMU_SHA256="${QEMU_SHA256:-c04ca36012653f32d11c674d370cf52a710e7d3f18c2d8b63e4932052a4854d6}"
+VIRTIOFSD_COMMIT="${VIRTIOFSD_COMMIT:-acb3d506a9f1b256fff7327023df85570caf1e75}"
 DEVICE_PROFILE="${DEVICE_PROFILE:-headless-linux}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -28,7 +29,7 @@ TARGET_ARCH="${TARGET_ARCH:-$ARCH_TAG}"
 TARGET_LIST="${TARGET_LIST:-$TARGET_ARCH-softmmu}"
 QEMU_SYSTEM_BIN="qemu-system-$TARGET_ARCH"
 HOST_TOOL_BINS=(qemu-img qemu-io qemu-nbd qemu-storage-daemon)
-LINUX_ONLY_BINS=(qemu-pr-helper qemu-ga)
+LINUX_ONLY_BINS=(qemu-pr-helper qemu-ga virtiofsd)
 PACKAGE_BINS=("$QEMU_SYSTEM_BIN" "${HOST_TOOL_BINS[@]}")
 BUILD_TARGETS=("$QEMU_SYSTEM_BIN" qemu-img qemu-io qemu-nbd storage-daemon/qemu-storage-daemon)
 UEFI_FIRMWARE=()
@@ -50,6 +51,7 @@ esac
 
 SOURCE_ARCHIVE="$DOWNLOAD_DIR/qemu-$QEMU_VERSION.tar.xz"
 SOURCE_DIR="$WORK_DIR/qemu-$QEMU_VERSION"
+VIRTIOFSD_SOURCE_DIR="$WORK_DIR/virtiofsd-$VIRTIOFSD_COMMIT"
 BUILD_DIR="$SOURCE_DIR/build"
 PACKAGE_NAME="qemu-$TARGET_ARCH-headless-linux"
 PREFIX="$WORK_DIR/install/$PACKAGE_NAME-$QEMU_VERSION-$OS_TAG-$ARCH_TAG"
@@ -122,12 +124,17 @@ download_source() {
 }
 
 prepare_source() {
-  rm -rf "$SOURCE_DIR" "$PREFIX" "$PACKAGE_DIR"
+  rm -rf "$SOURCE_DIR" "$VIRTIOFSD_SOURCE_DIR" "$PREFIX" "$PACKAGE_DIR"
   mkdir -p "$WORK_DIR" "$DIST_DIR"
   tar -C "$WORK_DIR" -xf "$SOURCE_ARCHIVE"
   mkdir -p "$SOURCE_DIR/configs/devices/$TARGET_ARCH-softmmu"
   cp "$ROOT_DIR/configs/devices/$TARGET_ARCH-softmmu/$DEVICE_PROFILE.mak" \
     "$SOURCE_DIR/configs/devices/$TARGET_ARCH-softmmu/$DEVICE_PROFILE.mak"
+
+  if [[ "$OS_TAG" == "linux" ]]; then
+    git clone https://gitlab.com/virtio-fs/virtiofsd.git "$VIRTIOFSD_SOURCE_DIR"
+    git -C "$VIRTIOFSD_SOURCE_DIR" checkout "$VIRTIOFSD_COMMIT"
+  fi
 }
 
 configure_qemu() {
@@ -225,6 +232,11 @@ configure_qemu() {
 build_and_install() {
   ninja -C "$BUILD_DIR" -j "$JOBS" "${BUILD_TARGETS[@]}"
   DESTDIR= ninja -C "$BUILD_DIR" install
+
+  if [[ "$OS_TAG" == "linux" ]]; then
+    cargo build --manifest-path "$VIRTIOFSD_SOURCE_DIR/Cargo.toml" --release --locked
+    cp "$VIRTIOFSD_SOURCE_DIR/target/release/virtiofsd" "$PREFIX/bin/virtiofsd"
+  fi
 }
 
 copy_base_package() {
@@ -334,6 +346,7 @@ Target:
 $(if [[ "$OS_TAG" == "linux" ]]; then cat <<'LINUX_TOOLS'
 - qemu-pr-helper
 - qemu-ga
+- virtiofsd
 LINUX_TOOLS
 fi)
 
@@ -374,7 +387,8 @@ Notes:
   Linux guest binary.
 - Linux packages include qemu-pr-helper for SCSI persistent reservation manager
   setups with shared SCSI LUNs.
-- virtiofsd is not included; provide a compatible virtiofsd separately.
+- Linux packages include virtiofsd built from
+  https://gitlab.com/virtio-fs/virtiofsd at $VIRTIOFSD_COMMIT.
 EOF
 }
 
@@ -396,6 +410,7 @@ verify_package() {
   if [[ "$OS_TAG" == "linux" ]]; then
     "$PACKAGE_DIR/bin/qemu-pr-helper" --version | tee "$PACKAGE_DIR/qemu-pr-helper-version.txt"
     "$PACKAGE_DIR/bin/qemu-ga" --version | tee "$PACKAGE_DIR/qemu-ga-version.txt"
+    "$PACKAGE_DIR/bin/virtiofsd" --version | tee "$PACKAGE_DIR/virtiofsd-version.txt"
   fi
   "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" -accel help
   "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" -display help

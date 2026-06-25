@@ -103,6 +103,7 @@ jobs:
           - qemu-storage-daemon
           - qemu-ga on Linux builds
           - qemu-pr-helper on Linux builds
+          - virtiofsd on Linux builds
           - matching-architecture EDK2 UEFI firmware
 
           Linux x86_64 packages are named qemu-x86_64-headless-linux and
@@ -118,7 +119,7 @@ jobs:
             the *-vars.fd template per VM before using it as a writable varstore.
           - qemu-ga is included only in Linux packages for same-architecture
             Linux guests.
-          - virtiofs requires a separate compatible virtiofsd.
+          - virtiofsd is included only in Linux packages for Linux hosts.
           EOF
 
       - name: Publish GitHub release

@@ -19,7 +19,8 @@ Linux x86_64 builds produce `qemu-x86_64-headless-linux` packages with
 All packages include `qemu-img`, `qemu-io`, `qemu-nbd`, and
 `qemu-storage-daemon`. Linux packages also include `qemu-ga` for
 same-architecture Linux guests and `qemu-pr-helper` for shared SCSI LUN
-persistent-reservation setups.
+persistent-reservation setups. Linux packages also include `virtiofsd` built
+from `gitlab.com/virtio-fs/virtiofsd`.
 
 All packages include matching-architecture EDK2 UEFI firmware copied from
 QEMU's upstream `pc-bios` blobs. The `*-vars.fd` file is a template; copy it per
