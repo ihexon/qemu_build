@@ -98,6 +98,11 @@ jobs:
           - qemu-system-aarch64 on aarch64 hosts
           - qemu-system-x86_64 on x86_64 hosts
           - qemu-img
+          - qemu-io
+          - qemu-nbd
+          - qemu-storage-daemon
+          - qemu-ga on Linux builds
+          - qemu-pr-helper on Linux builds
 
           Linux x86_64 packages are named qemu-x86_64-headless-linux and
           include x86 microvm machine support.
@@ -108,8 +113,9 @@ jobs:
           - Linux binaries are stripped with strip --strip-unneeded.
           - macOS links Homebrew GLib statically when available, and bundles any
             remaining non-system dylibs with @loader_path install names.
+          - qemu-ga is included only in Linux packages for same-architecture
+            Linux guests.
           - virtiofs requires a separate compatible virtiofsd.
-          - qemu-guest-agent should be installed inside Linux guests when needed.
           EOF
 
       - name: Publish GitHub release

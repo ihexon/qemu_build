@@ -27,6 +27,14 @@ esac
 TARGET_ARCH="${TARGET_ARCH:-$ARCH_TAG}"
 TARGET_LIST="${TARGET_LIST:-$TARGET_ARCH-softmmu}"
 QEMU_SYSTEM_BIN="qemu-system-$TARGET_ARCH"
+HOST_TOOL_BINS=(qemu-img qemu-io qemu-nbd qemu-storage-daemon)
+LINUX_ONLY_BINS=(qemu-pr-helper qemu-ga)
+PACKAGE_BINS=("$QEMU_SYSTEM_BIN" "${HOST_TOOL_BINS[@]}")
+BUILD_TARGETS=("$QEMU_SYSTEM_BIN" qemu-img qemu-io qemu-nbd storage-daemon/qemu-storage-daemon)
+if [[ "$OS_TAG" == "linux" ]]; then
+  PACKAGE_BINS+=("${LINUX_ONLY_BINS[@]}")
+  BUILD_TARGETS+=("${LINUX_ONLY_BINS[@]}")
+fi
 
 SOURCE_ARCHIVE="$DOWNLOAD_DIR/qemu-$QEMU_VERSION.tar.xz"
 SOURCE_DIR="$WORK_DIR/qemu-$QEMU_VERSION"
@@ -127,7 +135,6 @@ configure_qemu() {
     "--enable-tools"
     "--disable-docs"
     "--disable-install-blobs"
-    "--disable-guest-agent"
     "--enable-tcg"
     "--enable-fdt=internal"
     "--enable-vhost-user"
@@ -190,27 +197,31 @@ configure_qemu() {
 
   if [[ "$OS_TAG" == "macos" ]]; then
     args+=("--enable-hvf")
+    args+=("--disable-guest-agent")
   fi
 
   if [[ "$OS_TAG" == "linux" ]]; then
     args+=("--static")
     args+=("--enable-kvm")
+    args+=("--enable-guest-agent")
   fi
 
   (cd "$SOURCE_DIR" && ./configure "${args[@]}")
 }
 
 build_and_install() {
-  ninja -C "$BUILD_DIR" -j "$JOBS" "$QEMU_SYSTEM_BIN" qemu-img
+  ninja -C "$BUILD_DIR" -j "$JOBS" "${BUILD_TARGETS[@]}"
   DESTDIR= ninja -C "$BUILD_DIR" install
 }
 
 copy_base_package() {
+  local bin
   mkdir -p "$PACKAGE_DIR/bin" "$PACKAGE_DIR/share/qemu"
-  cp "$PREFIX/bin/$QEMU_SYSTEM_BIN" "$PACKAGE_DIR/bin/"
-  cp "$PREFIX/bin/qemu-img" "$PACKAGE_DIR/bin/"
+  for bin in "${PACKAGE_BINS[@]}"; do
+    cp "$PREFIX/bin/$bin" "$PACKAGE_DIR/bin/"
+  done
   if [[ "$OS_TAG" == "linux" ]]; then
-    strip --strip-unneeded "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" "$PACKAGE_DIR/bin/qemu-img"
+    strip --strip-unneeded "${PACKAGE_BINS[@]/#/$PACKAGE_DIR/bin/}"
   fi
   if [[ -f "$PREFIX/share/qemu/trace-events-all" ]]; then
     cp "$PREFIX/share/qemu/trace-events-all" "$PACKAGE_DIR/share/qemu/"
@@ -225,7 +236,7 @@ bundle_macos_dylibs() {
   local item dep base rel
   mkdir -p "$PACKAGE_DIR/lib"
 
-  local queue=("$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" "$PACKAGE_DIR/bin/qemu-img")
+  local queue=("${PACKAGE_BINS[@]/#/$PACKAGE_DIR/bin/}")
   local seen=""
 
   while ((${#queue[@]})); do
@@ -262,12 +273,16 @@ bundle_macos_dylibs() {
 }
 
 sign_macos_package() {
+  local bin
   local entitlements="$SOURCE_DIR/accel/hvf/entitlements.plist"
   xattr -cr "$PACKAGE_DIR" 2>/dev/null || true
   while IFS= read -r -d '' dylib; do
     codesign --force --sign - "$dylib"
   done < <(find "$PACKAGE_DIR/lib" -type f -name '*.dylib' -print0 2>/dev/null)
-  codesign --force --sign - "$PACKAGE_DIR/bin/qemu-img"
+  for bin in "${PACKAGE_BINS[@]}"; do
+    [[ "$bin" == "$QEMU_SYSTEM_BIN" ]] && continue
+    codesign --force --sign - "$PACKAGE_DIR/bin/$bin"
+  done
   if [[ -f "$entitlements" ]]; then
     codesign --force --sign - --entitlements "$entitlements" "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN"
   else
@@ -283,6 +298,14 @@ QEMU $QEMU_VERSION $OS_TAG $ARCH_TAG portable headless build
 Target:
 - $QEMU_SYSTEM_BIN
 - qemu-img
+- qemu-io
+- qemu-nbd
+- qemu-storage-daemon
+$(if [[ "$OS_TAG" == "linux" ]]; then cat <<'LINUX_TOOLS'
+- qemu-pr-helper
+- qemu-ga
+LINUX_TOOLS
+fi)
 
 Build profile:
 - $TARGET_LIST only
@@ -297,7 +320,6 @@ Trimmed:
 - VNC, Cocoa, SDL, GTK, OpenGL, SPICE
 - slirp, vmnet
 - QEMU firmware/blob installation
-- host qemu-ga binary
 - 9p virtfs, TPM, Xen, RDMA, USB redirection, audio backends
 - old image formats: bochs, cloop, dmg, qcow1, qed, vdi, vhdx, vmdk, vpc, parallels
 - remote storage libraries: rbd, glusterfs, libiscsi, libnfs, libssh, curl
@@ -314,13 +336,17 @@ Notes:
 - No upstream QEMU C source patches are applied.
 - The build copies in one QEMU device profile:
   configs/devices/$TARGET_ARCH-softmmu/headless-linux.mak
-- Linux guests should install qemu-guest-agent inside the guest. This package
-  provides the QEMU-side virtio-serial channel, not a guest agent binary.
+- Linux packages include qemu-ga for same-architecture Linux guests. macOS
+  packages do not include qemu-ga because that would be a macOS binary, not a
+  Linux guest binary.
+- Linux packages include qemu-pr-helper for SCSI persistent reservation manager
+  setups with shared SCSI LUNs.
 - virtiofsd is not included; provide a compatible virtiofsd separately.
 EOF
 }
 
 verify_package() {
+  local bin
   local machine
 
   if [[ "$TARGET_ARCH" == "x86_64" ]]; then
@@ -330,7 +356,13 @@ verify_package() {
   fi
 
   "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" --version
-  "$PACKAGE_DIR/bin/qemu-img" --version
+  for bin in "${HOST_TOOL_BINS[@]}"; do
+    "$PACKAGE_DIR/bin/$bin" --version | tee "$PACKAGE_DIR/$bin-version.txt"
+  done
+  if [[ "$OS_TAG" == "linux" ]]; then
+    "$PACKAGE_DIR/bin/qemu-pr-helper" --version | tee "$PACKAGE_DIR/qemu-pr-helper-version.txt"
+    "$PACKAGE_DIR/bin/qemu-ga" --version | tee "$PACKAGE_DIR/qemu-ga-version.txt"
+  fi
   "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" -accel help
   "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" -display help
   "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" -machine help | tee "$PACKAGE_DIR/machine-help.txt"
@@ -352,11 +384,15 @@ verify_package() {
   fi
 
   if [[ "$OS_TAG" == "macos" ]]; then
-    otool -L "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" | tee "$PACKAGE_DIR/otool-$QEMU_SYSTEM_BIN.txt"
-    codesign --verify --verbose=2 "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" "$PACKAGE_DIR/bin/qemu-img"
+    for bin in "${PACKAGE_BINS[@]}"; do
+      otool -L "$PACKAGE_DIR/bin/$bin" | tee "$PACKAGE_DIR/otool-$bin.txt"
+    done
+    codesign --verify --verbose=2 "${PACKAGE_BINS[@]/#/$PACKAGE_DIR/bin/}"
   else
-    file "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" | tee "$PACKAGE_DIR/file-$QEMU_SYSTEM_BIN.txt"
-    ldd "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" | tee "$PACKAGE_DIR/ldd-$QEMU_SYSTEM_BIN.txt" || true
+    for bin in "${PACKAGE_BINS[@]}"; do
+      file "$PACKAGE_DIR/bin/$bin" | tee "$PACKAGE_DIR/file-$bin.txt"
+      ldd "$PACKAGE_DIR/bin/$bin" | tee "$PACKAGE_DIR/ldd-$bin.txt" || true
+    done
   fi
 }
 
