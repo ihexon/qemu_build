@@ -73,7 +73,7 @@ install_dependencies() {
           bison build-base ca-certificates curl file flex gettext-dev \
           gettext-static git glib-dev glib-static libffi-dev eudev-dev \
           linux-headers meson ninja pcre2-dev pkgconf python3 \
-          xz zlib-dev zlib-static
+          xz zlib-dev zlib-static pcre2-static
       elif command -v apt-get >/dev/null 2>&1; then
         local apt=(apt-get)
         if [[ "${EUID:-$(id -u)}" != "0" ]]; then
