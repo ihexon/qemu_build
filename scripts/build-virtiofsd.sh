@@ -68,11 +68,13 @@ prepare_source() {
 }
 
 build_and_install() {
+    # Official musl Rust targets already default to a static CRT. Keeping
+    # crt-static out of global RUSTFLAGS avoids breaking proc-macro crates.
     LIBSECCOMP_LINK_TYPE=static \
         LIBSECCOMP_LIB_PATH=/usr/lib \
         LIBCAPNG_LINK_TYPE=static \
         LIBCAPNG_LIB_PATH=/usr/lib \
-        RUSTFLAGS="-C target-feature=+crt-static -C link-arg=-static-libgcc" \
+        RUSTFLAGS="-C link-arg=-static-libgcc" \
         cargo rustc --manifest-path "$SOURCE_DIR/Cargo.toml" \
         --release --locked -j "$JOBS" --bin virtiofsd
 
