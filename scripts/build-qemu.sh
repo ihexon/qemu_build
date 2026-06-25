@@ -31,10 +31,22 @@ HOST_TOOL_BINS=(qemu-img qemu-io qemu-nbd qemu-storage-daemon)
 LINUX_ONLY_BINS=(qemu-pr-helper qemu-ga)
 PACKAGE_BINS=("$QEMU_SYSTEM_BIN" "${HOST_TOOL_BINS[@]}")
 BUILD_TARGETS=("$QEMU_SYSTEM_BIN" qemu-img qemu-io qemu-nbd storage-daemon/qemu-storage-daemon)
+UEFI_FIRMWARE=()
+UEFI_DESCRIPTORS=()
 if [[ "$OS_TAG" == "linux" ]]; then
   PACKAGE_BINS+=("${LINUX_ONLY_BINS[@]}")
   BUILD_TARGETS+=("${LINUX_ONLY_BINS[@]}")
 fi
+case "$TARGET_ARCH" in
+  aarch64)
+    UEFI_FIRMWARE=(edk2-aarch64-code.fd edk2-arm-vars.fd)
+    UEFI_DESCRIPTORS=(60-edk2-aarch64.json)
+    ;;
+  x86_64)
+    UEFI_FIRMWARE=(edk2-x86_64-code.fd edk2-i386-vars.fd)
+    UEFI_DESCRIPTORS=(60-edk2-x86_64.json)
+    ;;
+esac
 
 SOURCE_ARCHIVE="$DOWNLOAD_DIR/qemu-$QEMU_VERSION.tar.xz"
 SOURCE_DIR="$WORK_DIR/qemu-$QEMU_VERSION"
@@ -229,6 +241,23 @@ copy_base_package() {
   fi
 }
 
+copy_uefi_firmware() {
+  local firmware descriptor
+  ((${#UEFI_FIRMWARE[@]})) || return 0
+
+  mkdir -p "$PACKAGE_DIR/share/qemu/firmware"
+  for firmware in "${UEFI_FIRMWARE[@]}"; do
+    bzip2 -dc "$SOURCE_DIR/pc-bios/$firmware.bz2" > "$PACKAGE_DIR/share/qemu/$firmware"
+  done
+  cp "$SOURCE_DIR/pc-bios/edk2-licenses.txt" "$PACKAGE_DIR/share/qemu/"
+
+  for descriptor in "${UEFI_DESCRIPTORS[@]}"; do
+    sed "s|@DATADIR@|..|g" \
+      "$SOURCE_DIR/pc-bios/descriptors/$descriptor" \
+      > "$PACKAGE_DIR/share/qemu/firmware/$descriptor"
+  done
+}
+
 is_system_macho_dep() {
   [[ "$1" == /usr/lib/* || "$1" == /System/Library/* ]]
 }
@@ -316,6 +345,7 @@ Build profile:
 - virtio-blk, virtio-net, virtio-pci, virtio-rng, virtio-balloon
 - virtio-scsi, virtio-serial, virtserialport
 - vhost-user-fs for virtiofs
+- matching-architecture EDK2 UEFI firmware from QEMU pc-bios
 
 Trimmed:
 - VNC, Cocoa, SDL, GTK, OpenGL, SPICE
@@ -337,6 +367,8 @@ Notes:
 - No upstream QEMU C source patches are applied.
 - The build copies in one QEMU device profile:
   configs/devices/$TARGET_ARCH-softmmu/headless-linux.mak
+- UEFI firmware is copied from QEMU pc-bios prebuilt EDK2 blobs. Treat
+  *-vars.fd as a writable template and copy it per VM before booting.
 - Linux packages include qemu-ga for same-architecture Linux guests. macOS
   packages do not include qemu-ga because that would be a macOS binary, not a
   Linux guest binary.
@@ -348,6 +380,7 @@ EOF
 
 verify_package() {
   local bin
+  local firmware descriptor
   local machine
 
   if [[ "$TARGET_ARCH" == "x86_64" ]]; then
@@ -370,6 +403,15 @@ verify_package() {
   "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" -machine "$machine" -device help | tee "$PACKAGE_DIR/device-help.txt"
   "$PACKAGE_DIR/bin/$QEMU_SYSTEM_BIN" -machine "$machine" -netdev help | tee "$PACKAGE_DIR/netdev-help.txt"
   "$PACKAGE_DIR/bin/qemu-img" --help | tee "$PACKAGE_DIR/qemu-img-help.txt"
+
+  for firmware in "${UEFI_FIRMWARE[@]}"; do
+    test -s "$PACKAGE_DIR/share/qemu/$firmware"
+    file "$PACKAGE_DIR/share/qemu/$firmware" | tee "$PACKAGE_DIR/file-$firmware.txt"
+  done
+  for descriptor in "${UEFI_DESCRIPTORS[@]}"; do
+    test -s "$PACKAGE_DIR/share/qemu/firmware/$descriptor"
+    grep -q '../' "$PACKAGE_DIR/share/qemu/firmware/$descriptor"
+  done
 
   grep -q 'virtio-blk-pci' "$PACKAGE_DIR/device-help.txt"
   grep -q 'virtio-net-pci' "$PACKAGE_DIR/device-help.txt"
@@ -409,6 +451,7 @@ main() {
   configure_qemu
   build_and_install
   copy_base_package
+  copy_uefi_firmware
   if [[ "$OS_TAG" == "macos" ]]; then
     bundle_macos_dylibs
     sign_macos_package

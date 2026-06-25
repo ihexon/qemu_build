@@ -103,6 +103,7 @@ jobs:
           - qemu-storage-daemon
           - qemu-ga on Linux builds
           - qemu-pr-helper on Linux builds
+          - matching-architecture EDK2 UEFI firmware
 
           Linux x86_64 packages are named qemu-x86_64-headless-linux and
           include x86 microvm machine support.
@@ -113,6 +114,8 @@ jobs:
           - Linux binaries are stripped with strip --strip-unneeded.
           - macOS links Homebrew GLib statically when available, and bundles any
             remaining non-system dylibs with @loader_path install names.
+          - UEFI firmware is copied from QEMU pc-bios prebuilt EDK2 blobs; copy
+            the *-vars.fd template per VM before using it as a writable varstore.
           - qemu-ga is included only in Linux packages for same-architecture
             Linux guests.
           - virtiofs requires a separate compatible virtiofsd.

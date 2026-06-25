@@ -21,9 +21,13 @@ All packages include `qemu-img`, `qemu-io`, `qemu-nbd`, and
 same-architecture Linux guests and `qemu-pr-helper` for shared SCSI LUN
 persistent-reservation setups.
 
-The build intentionally omits desktop/display features, bundled firmware blobs,
-cross-architecture emulators, and storage/display integrations that are not
-needed for the intended headless libvirt use case.
+All packages include matching-architecture EDK2 UEFI firmware copied from
+QEMU's upstream `pc-bios` blobs. The `*-vars.fd` file is a template; copy it per
+VM before using it as a writable varstore.
+
+The build intentionally omits desktop/display features, unrelated firmware
+blobs, cross-architecture emulators, and storage/display integrations that are
+not needed for the intended headless libvirt use case.
 
 Build scripts live in `scripts/`, the device profile lives in `configs/`, and
 GitHub Actions publishes release archives from tagged builds.
