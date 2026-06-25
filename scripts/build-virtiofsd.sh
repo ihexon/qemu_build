@@ -90,7 +90,7 @@ verify_package() {
     file_output="$(file "$PREFIX/virtiofsd")"
     echo "$file_output"
     case "$file_output" in
-        *"statically linked"*) ;;
+        *"statically linked"* | *"static-pie linked"*) ;;
         *)
             echo "virtiofsd is not fully statically linked" >&2
             exit 1
