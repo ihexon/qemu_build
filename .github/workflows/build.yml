@@ -120,8 +120,7 @@ jobs:
           - No upstream QEMU C source patches are applied.
           - QEMU Linux builds are produced inside Alpine/musl containers.
           - QEMU Linux binaries are stripped with strip --strip-unneeded.
-          - virtiofsd Linux packages are built separately with the official
-            Rust toolchain from rustup.
+          - virtiofsd Linux packages are built separately inside Alpine.
           - macOS links Homebrew GLib statically when available, and bundles any
             remaining non-system dylibs with @loader_path install names.
           - UEFI firmware is copied from QEMU pc-bios prebuilt EDK2 blobs; copy

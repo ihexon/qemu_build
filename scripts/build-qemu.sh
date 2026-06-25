@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 QEMU_VERSION="${QEMU_VERSION:-11.0.0}"
 QEMU_SHA256="${QEMU_SHA256:-c04ca36012653f32d11c674d370cf52a710e7d3f18c2d8b63e4932052a4854d6}"
 DEVICE_PROFILE="${DEVICE_PROFILE:-headless-linux}"
@@ -67,6 +66,9 @@ install_dependencies() {
       ;;
     linux)
       if command -v apk >/dev/null 2>&1; then
+        if [[ -f /etc/apk/repositories ]]; then
+          sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#https://mirrors.tuna.tsinghua.edu.cn/alpine#g' /etc/apk/repositories
+        fi
         apk add --no-cache \
           bison build-base ca-certificates curl file flex gettext-dev \
           gettext-static git glib-dev glib-static libffi-dev eudev-dev \
