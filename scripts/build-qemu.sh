@@ -29,14 +29,15 @@ TARGET_ARCH="${TARGET_ARCH:-$ARCH_TAG}"
 TARGET_LIST="${TARGET_LIST:-$TARGET_ARCH-softmmu}"
 QEMU_SYSTEM_BIN="qemu-system-$TARGET_ARCH"
 HOST_TOOL_BINS=(qemu-img qemu-io qemu-nbd qemu-storage-daemon)
-LINUX_ONLY_BINS=(qemu-pr-helper qemu-ga virtiofsd)
+QEMU_LINUX_ONLY_BINS=(qemu-pr-helper qemu-ga)
+EXTRA_LINUX_ONLY_BINS=(virtiofsd)
 PACKAGE_BINS=("$QEMU_SYSTEM_BIN" "${HOST_TOOL_BINS[@]}")
 BUILD_TARGETS=("$QEMU_SYSTEM_BIN" qemu-img qemu-io qemu-nbd storage-daemon/qemu-storage-daemon)
 UEFI_FIRMWARE=()
 UEFI_DESCRIPTORS=()
 if [[ "$OS_TAG" == "linux" ]]; then
-  PACKAGE_BINS+=("${LINUX_ONLY_BINS[@]}")
-  BUILD_TARGETS+=("${LINUX_ONLY_BINS[@]}")
+  PACKAGE_BINS+=("${QEMU_LINUX_ONLY_BINS[@]}" "${EXTRA_LINUX_ONLY_BINS[@]}")
+  BUILD_TARGETS+=("${QEMU_LINUX_ONLY_BINS[@]}")
 fi
 case "$TARGET_ARCH" in
   aarch64)
