@@ -13,22 +13,28 @@ case "$(uname -s)" in
   Linux)
     if command -v apk >/dev/null 2>&1; then
       apk add --no-cache \
-        bash bison build-base ca-certificates cargo curl file flex gettext-dev \
+        bash bison build-base ca-certificates curl file flex gettext-dev \
         gettext-static git glib-dev glib-static libcap-ng-dev libcap-ng-static \
         libffi-dev libseccomp-dev libseccomp-static eudev-dev linux-headers \
-        meson ninja pcre2-dev pkgconf python3 rust \
+        meson ninja pcre2-dev pkgconf python3 \
         xz zlib-dev zlib-static
     elif command -v apt-get >/dev/null 2>&1; then
       sudo apt-get update
       sudo apt-get install -y \
         build-essential ca-certificates curl file flex bison \
-        cargo gettext libcap-ng-dev libffi-dev libglib2.0-dev libpcre2-dev \
+        gettext libcap-ng-dev libffi-dev libglib2.0-dev libpcre2-dev \
         libseccomp-dev libudev-dev meson ninja-build pkg-config python3 \
-        python3-venv rustc zlib1g-dev
+        python3-venv zlib1g-dev
     else
       echo "Unsupported Linux package manager; install QEMU build dependencies manually" >&2
       exit 1
     fi
+
+    if ! command -v rustup >/dev/null 2>&1; then
+      curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh
+      sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain stable --no-modify-path
+    fi
+    export PATH="$HOME/.cargo/bin:$PATH"
     ;;
   *)
     echo "Unsupported host OS: $(uname -s)" >&2
