@@ -21,9 +21,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: ./scripts/install-deps.sh
-
       - name: Build and package
         run: ./scripts/build-qemu.sh
 
@@ -53,13 +50,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build and package in Alpine
+      - name: Build virtiofsd package in Alpine
         run: |
           docker run --rm \
             -v "$PWD:/work" \
             -w /work \
-            alpine:3.20 \
-            /bin/sh -lc 'apk add --no-cache bash && bash ./scripts/install-deps.sh && bash ./scripts/build-qemu.sh'
+            alpine:edge \
+            /bin/sh -lc 'apk add --no-cache bash && bash ./scripts/build-virtiofsd.sh'
+
+      - name: Build QEMU package in Alpine
+        run: |
+          docker run --rm \
+            -v "$PWD:/work" \
+            -w /work \
+            alpine:edge \
+            /bin/sh -lc 'apk add --no-cache bash && bash ./scripts/build-qemu.sh'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -103,23 +108,27 @@ jobs:
           - qemu-storage-daemon
           - qemu-ga on Linux builds
           - qemu-pr-helper on Linux builds
-          - virtiofsd on Linux builds
           - matching-architecture EDK2 UEFI firmware
+
+          Separate Linux-only binaries:
+          - virtiofsd
 
           Linux x86_64 packages are named qemu-x86_64-headless-linux and
           include x86 microvm machine support.
 
           Notes:
           - No upstream QEMU C source patches are applied.
-          - Linux builds are produced inside Alpine/musl containers.
-          - Linux binaries are stripped with strip --strip-unneeded.
+          - QEMU Linux builds are produced inside Alpine/musl containers.
+          - QEMU Linux binaries are stripped with strip --strip-unneeded.
+          - virtiofsd Linux packages are built separately with the official
+            Rust toolchain from rustup.
           - macOS links Homebrew GLib statically when available, and bundles any
             remaining non-system dylibs with @loader_path install names.
           - UEFI firmware is copied from QEMU pc-bios prebuilt EDK2 blobs; copy
             the *-vars.fd template per VM before using it as a writable varstore.
           - qemu-ga is included only in Linux packages for same-architecture
             Linux guests.
-          - virtiofsd is included only in Linux packages for Linux hosts.
+          - virtiofsd is published as a separate Linux-only package.
           EOF
 
       - name: Publish GitHub release

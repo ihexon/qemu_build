@@ -16,13 +16,15 @@ Release artifacts are built for:
 Linux x86_64 builds produce `qemu-x86_64-headless-linux` packages with
 `qemu-system-x86_64`, including x86 `microvm` machine support.
 
-All packages include `qemu-img`, `qemu-io`, `qemu-nbd`, and
+All QEMU packages include `qemu-img`, `qemu-io`, `qemu-nbd`, and
 `qemu-storage-daemon`. Linux packages also include `qemu-ga` for
 same-architecture Linux guests and `qemu-pr-helper` for shared SCSI LUN
-persistent-reservation setups. Linux packages also include `virtiofsd` built
+persistent-reservation setups.
+
+Linux builds also publish a separate `virtiofsd` package for Linux hosts, built
 from `gitlab.com/virtio-fs/virtiofsd`.
 
-All packages include matching-architecture EDK2 UEFI firmware copied from
+All QEMU packages include matching-architecture EDK2 UEFI firmware copied from
 QEMU's upstream `pc-bios` blobs. The `*-vars.fd` file is a template; copy it per
 VM before using it as a writable varstore.
 
@@ -31,4 +33,5 @@ blobs, cross-architecture emulators, and storage/display integrations that are
 not needed for the intended headless libvirt use case.
 
 Build scripts live in `scripts/`, the device profile lives in `configs/`, and
-GitHub Actions publishes release archives from tagged builds.
+GitHub Actions publishes release archives from tagged builds. `build-qemu.sh`
+and `build-virtiofsd.sh` can be run independently.
